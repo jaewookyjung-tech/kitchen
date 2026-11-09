@@ -107,6 +107,42 @@ h2 { margin: 12px 0 10px; font-size: 22px; }
   padding: 14px 24px; border-radius: 999px; font-size: 24px; opacity: 0; transition: opacity .25s; z-index: 70; pointer-events: none; }
 #toast.show { opacity: 1; }
 .hint { font-size: 15px; color: var(--muted); margin-top: 6px; }
+
+/* recipe finder */
+.finder { background: var(--panel); border-radius: 16px; padding: 14px; margin-bottom: 8px; }
+.finder .vrow { margin-top: 8px; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 12px; }
+.rcard { display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px; background: var(--panel2); }
+.rcard img { width: 84px; height: 84px; border-radius: 10px; object-fit: cover; flex: 0 0 auto; background: #000; }
+.rcard .t { font-size: 18px; font-weight: 600; }
+.rcard .m { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.rcard .m b { color: var(--good); font-weight: 600; }
+.preview img.hero { width: 100%; max-height: 260px; object-fit: cover; border-radius: 16px; }
+.preview ol { font-size: 19px; line-height: 1.45; padding-left: 26px; }
+.preview ul { font-size: 18px; line-height: 1.5; padding-left: 22px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+
+/* video split view: player + timers side by side (stacked in portrait) */
+body[data-tab="video"] #strip { display: none; }
+.vsplit { display: flex; flex-direction: column; gap: 14px; }
+.vmain { min-width: 0; }
+.vside { background: var(--panel); border-radius: 16px; padding: 12px; }
+.vside h2 { margin-top: 0; }
+@media (orientation: landscape) {
+  .vsplit { flex-direction: row; align-items: flex-start; }
+  .vmain { flex: 3; }
+  .vside { flex: 2; position: sticky; top: 0; max-height: calc(100vh - 170px); overflow-y: auto; }
+}
+#player { display: block; }
+.side-timer { display: flex; align-items: center; gap: 8px; background: var(--panel2); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+.side-timer .name { flex: 1; font-size: 17px; }
+.side-timer .left { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.side-timer.done { outline: 3px solid var(--bad); }
+.side-timer.paused .left { color: var(--muted); }
+.side-timer button { padding: 10px 12px; }
+.side-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.side-presets button { font-size: 15px; padding: 10px 4px; }
+.side-presets button small { display: block; color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -150,16 +186,27 @@ h2 { margin: 12px 0 10px; font-size: 22px; }
 
     <!-- VIDEO -->
     <section id="video">
-      <h2>YouTube</h2>
-      <div class="vrow">
-        <input id="vInput" placeholder="Search, or paste a YouTube link">
-        <button class="primary" id="vGo">Go</button>
+      <div class="vsplit">
+        <div class="vmain">
+          <iframe id="player" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+          <div id="vOpen"></div>
+          <div class="vrow" style="margin-top:12px">
+            <input id="vInput" placeholder="Search YouTube, or paste a link">
+            <button class="primary" id="vGo">Go</button>
+          </div>
+          <div class="actions">
+            <button id="vPaste">📋 Paste &amp; play copied link</button>
+          </div>
+          <div class="hint">Search opens YouTube in a new tab. On a video there, tap Share → Copy link, come back to this tab and tap "Paste &amp; play". Recipes from the finder bring their own video.</div>
+          <h2>Recent</h2>
+          <div class="vlist" id="vList"></div>
+        </div>
+        <aside class="vside">
+          <h2>⏱ Timers</h2>
+          <div id="sideTimers"></div>
+          <div class="side-presets" id="sidePresets"></div>
+        </aside>
       </div>
-      <div class="hint">A pasted link plays here. A search opens YouTube in a new tab; copy a video's link and paste it here to play it next to your timers.</div>
-      <iframe id="player" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
-      <div id="vOpen"></div>
-      <h2>Recent</h2>
-      <div class="vlist" id="vList"></div>
     </section>
   </main>
 </div>
@@ -216,6 +263,7 @@ function showTab(name) {
   currentTab = name;
   $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   $$("main section").forEach(s => s.classList.toggle("active", s.id === name));
+  document.body.dataset.tab = name;
   store.set("tab", name);
 }
 $$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -294,6 +342,26 @@ function renderTimers() {
     $$("button", el).forEach(b => b.onclick = () => b.dataset.act === "pause" ? togglePause(id) : removeTimer(id));
   });
   renderStrip();
+  renderSide();
+}
+// compact copy of the timers for the video split view
+function renderSide() {
+  $("#sideTimers").innerHTML = timers.length ? timers.map(t => {
+    const cls = t.done ? "done" : t.endAt ? "" : "paused";
+    return `<div class="side-timer ${cls}" data-id="${t.id}">
+      <div class="name">${esc(t.name)}</div>
+      <div class="left">${t.done ? "Done!" : fmt(remainingOf(t))}</div>
+      ${t.done ? "" : `<button data-act="pause">${t.endAt ? "⏸" : "▶"}</button>`}
+      <button data-act="del" class="${t.done ? "danger" : ""}">${t.done ? "Stop" : "✕"}</button></div>`;
+  }).join("") : `<p class="muted">No timers running.</p>`;
+  $$("#sideTimers .side-timer").forEach(el => {
+    const id = Number(el.dataset.id);
+    $$("button", el).forEach(b => b.onclick = () => b.dataset.act === "pause" ? togglePause(id) : removeTimer(id));
+  });
+}
+function renderSidePresets() {
+  $("#sidePresets").innerHTML = PRESETS.map(([n, s], i) => `<button data-p="${i}">${esc(n)}<small>${fmt(s)}</small></button>`).join("");
+  $$("#sidePresets button").forEach(b => b.onclick = () => { const [n, s] = PRESETS[b.dataset.p]; addTimer(n, s); });
 }
 function renderStrip() {
   $("#strip").innerHTML = timers.map(t => `<div class="chip ${t.done ? "done" : ""}">${esc(t.name)}<b>${t.done ? "Done" : fmt(remainingOf(t))}</b></div>`).join("");
@@ -308,6 +376,10 @@ function tickTimers() {
     const left = remainingOf(t);
     $(".left", el).textContent = t.done ? "Done!" : fmt(left);
     $(".bar", el).style.width = Math.max(0, Math.min(100, 100 * (1 - left / t.total))) + "%";
+  });
+  $$("#sideTimers .side-timer").forEach(el => {
+    const t = timers.find(x => x.id === Number(el.dataset.id)); if (!t) return;
+    $(".left", el).textContent = t.done ? "Done!" : fmt(remainingOf(t));
   });
   if (changed) renderTimers(); else renderStrip();
   checkAlarm();
@@ -356,15 +428,52 @@ function findDurations(text) {
 function renderRecipes() {
   const v = $("#recipeView");
   if (rState.mode === "list") {
-    v.innerHTML = `<div class="rhead"><h2>Recipes</h2><button class="primary" id="rNew">+ Add recipe</button></div>
+    const f = finder;
+    const res = f.loading ? `<p class="muted">Searching…</p>`
+      : f.error ? `<p class="muted">${esc(f.error)}</p>`
+      : f.results ? (f.results.length ? `<div class="results">${f.results.map((m, i) => `<button class="rcard" data-r="${i}">
+          <img src="${esc(m.thumb)}/small" alt="" loading="lazy">
+          <div><div class="t">${esc(m.name)}</div>
+          <div class="m">Uses <b>${m.hits.map(esc).join(", ")}</b>${f.terms.length > 1 ? ` · ${m.hits.length} of ${f.terms.length}` : ""}</div></div></button>`).join("")}</div>`
+        : `<p class="muted">No recipes found with those ingredients. Try fewer or simpler ones (e.g. "chicken" rather than "chicken thighs").</p>`)
+      : "";
+    v.innerHTML = `<div class="finder">
+        <h2 style="margin-top:0">🔎 What can I make?</h2>
+        <div class="vrow"><input id="fQ" placeholder="Ingredients you have, e.g. chicken, mushrooms, rice" value="${esc(f.q)}"><button class="primary" id="fGo">Find</button></div>
+        <div class="actions"><button id="fWeb">Search the web instead</button></div>
+        ${res}
+      </div>
+      <div class="rhead"><h2>My recipes</h2><button class="primary" id="rNew">+ Add recipe</button></div>
       <div class="rlist">${recipes.map(r => `<button data-id="${r.id}">${esc(r.title)}</button>`).join("")}</div>`;
+    const go = () => findRecipes($("#fQ").value);
+    $("#fGo").onclick = go;
+    $("#fQ").addEventListener("keydown", e => { if (e.key === "Enter") { e.target.blur(); go(); } });
+    $("#fWeb").onclick = () => { const q = $("#fQ").value.trim(); window.open("https://www.google.com/search?q=" + encodeURIComponent("recipe with " + (q || "what I have")), "_blank"); };
+    $$(".rcard").forEach(b => b.onclick = () => openOnline(f.results[b.dataset.r].id));
     $("#rNew").onclick = () => { rState = { mode: "edit", id: null }; renderRecipes(); };
     $$(".rlist button").forEach(b => b.onclick = () => { rState = { mode: "view", id: Number(b.dataset.id), step: 0, got: {} }; renderRecipes(); });
+  } else if (rState.mode === "online") {
+    const r = rState.rec, saved = recipes.some(x => x.id === r.id);
+    v.innerHTML = `<div class="preview"><div class="rhead"><button id="oBack">‹ Results</button><h2>${esc(r.title)}</h2></div>
+      ${r.thumb ? `<img class="hero" src="${esc(r.thumb)}" alt="">` : ""}
+      <div class="actions">
+        <button class="primary" id="oCook">👩‍🍳 Cook this</button>
+        ${saved ? "" : `<button id="oSave">☆ Save to My recipes</button>`}
+        ${r.video ? `<button id="oVideo">▶ Watch video</button>` : ""}
+      </div>
+      <h2>Ingredients</h2><ul>${r.ingredients.map(g => `<li>${esc(g)}</li>`).join("")}</ul>
+      <h2>Method</h2><ol>${r.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>
+      ${r.source ? `<p class="hint">Original: ${esc(r.source)}</p>` : ""}</div>`;
+    const save = () => { if (!recipes.some(x => x.id === r.id)) { recipes = recipes.concat(r); saveRecipes(); } };
+    $("#oBack").onclick = () => { rState = { mode: "list" }; renderRecipes(); };
+    $("#oCook").onclick = () => { save(); rState = { mode: "view", id: r.id, step: 0, got: {} }; renderRecipes(); };
+    if (!saved) $("#oSave").onclick = () => { save(); toast("☆ Saved"); renderRecipes(); };
+    if (r.video) $("#oVideo").onclick = () => { const id = ytId(r.video); if (id) { playVideo(id); showTab("video"); } };
   } else if (rState.mode === "view") {
     const r = recipes.find(x => x.id === rState.id); if (!r) { rState = { mode: "list" }; return renderRecipes(); }
     const s = Math.min(rState.step, r.steps.length - 1), text = r.steps[s] || "";
     const durs = findDurations(text);
-    v.innerHTML = `<div class="rhead"><button id="rBack">‹ All</button><h2>${esc(r.title)}</h2><button id="rEdit">Edit</button></div>
+    v.innerHTML = `<div class="rhead"><button id="rBack">‹ All</button><h2>${esc(r.title)}</h2>${r.video ? `<button id="rVideo">▶ Video</button>` : ""}<button id="rEdit">Edit</button></div>
       <div class="stepbox">
         <div class="stepno">Step ${s + 1} of ${r.steps.length}</div>
         <div class="steptext">${esc(text)}</div>
@@ -376,6 +485,7 @@ function renderRecipes() {
       <div class="ingredients">${r.ingredients.map((g, i) => `<label class="${rState.got[i] ? "got" : ""}"><input type="checkbox" data-i="${i}" ${rState.got[i] ? "checked" : ""}>${esc(g)}</label>`).join("")}</div>`;
     $("#rBack").onclick = () => { rState = { mode: "list" }; renderRecipes(); };
     $("#rEdit").onclick = () => { rState = { mode: "edit", id: r.id }; renderRecipes(); };
+    if (r.video) $("#rVideo").onclick = () => { const id = ytId(r.video); if (id) { playVideo(id); showTab("video"); } };
     $("#rPrev").onclick = () => recipeStep(-1);
     $("#rNext").onclick = () => s === r.steps.length - 1 ? (rState = { mode: "list" }, renderRecipes()) : recipeStep(1);
     $$(".steptimers button").forEach(b => b.onclick = () => { const d = durs[b.dataset.d]; addTimer(r.title.split(" ").slice(0, 2).join(" ") + " · step " + (s + 1), d.secs); });
@@ -398,6 +508,65 @@ function renderRecipes() {
     if (rState.id) $("#fDel").onclick = () => { if (confirm("Delete this recipe?")) { recipes = recipes.filter(x => x.id !== rState.id); saveRecipes(); rState = { mode: "list" }; renderRecipes(); } };
   }
 }
+// ---------- recipe finder (TheMealDB free API: no key, allows browser requests) ----------
+const MEALDB = "https://www.themealdb.com/api/json/v1/1/";
+let finder = { q: store.get("finderQ", ""), loading: false, error: "", results: null, terms: [] };
+let ingredientNames = null;
+async function getJSON(url) {
+  const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+async function findRecipes(q) {
+  q = q.trim(); finder.q = q; store.set("finderQ", q);
+  const terms = q.toLowerCase().split(/,|\n|;|\band\b|\+/).map(s => s.trim()).filter(s => s.replace(/[^a-z0-9]/g, "").length >= 2).slice(0, 6);
+  if (!terms.length) return;
+  finder = { ...finder, loading: true, error: "", results: null, terms };
+  renderRecipes();
+  try {
+    if (!ingredientNames) ingredientNames = (await getJSON(MEALDB + "list.php?i=list")).meals.map(m => m.strIngredient);
+    const byId = new Map();
+    await Promise.all(terms.map(async term => {
+      // match what the user typed to the database's ingredient names: exact first, then names containing the word
+      const word = new RegExp("\\b" + term.replace(/[^a-z0-9 ]/g, "").replace(/s$/, "") + "s?\\b", "i");
+      const names = ingredientNames.filter(n => n.toLowerCase() === term)
+        .concat(ingredientNames.filter(n => n.toLowerCase() !== term && word.test(n)).sort((a, b) => a.length - b.length))
+        .slice(0, 6);
+      if (!names.length) names.push(term);
+      const lists = await Promise.all(names.map(n => getJSON(MEALDB + "filter.php?i=" + encodeURIComponent(n.replace(/ /g, "_"))).catch(() => ({ meals: null }))));
+      lists.forEach(l => (l.meals || []).forEach(m => {
+        const e = byId.get(m.idMeal) || { id: m.idMeal, name: m.strMeal, thumb: m.strMealThumb, hits: [] };
+        if (!e.hits.includes(term)) e.hits.push(term);
+        byId.set(m.idMeal, e);
+      }));
+    }));
+    finder.results = [...byId.values()].sort((a, b) => b.hits.length - a.hits.length || a.name.localeCompare(b.name)).slice(0, 40);
+  } catch (e) {
+    finder.error = "Couldn't reach the recipe service. Check the Wi-Fi and try again.";
+  }
+  finder.loading = false;
+  if (currentTab === "recipes" && rState.mode === "list") renderRecipes();
+}
+function mealToRecipe(m) {
+  const ingredients = [];
+  for (let i = 1; i <= 20; i++) {
+    const g = (m["strIngredient" + i] || "").trim(), q = (m["strMeasure" + i] || "").trim();
+    if (g) ingredients.push(q ? `${q} ${g}` : g);
+  }
+  let steps = (m.strInstructions || "").split(/\r?\n+/).map(s => s.trim())
+    .filter(s => s && !/^(step\s*)?\d+[.:)]?$/i.test(s))
+    .map(s => s.replace(/^(step\s*\d+\s*[-.:)]?|\d+[.)])\s*/i, ""));
+  if (steps.length <= 2) steps = steps.join(" ").split(/(?<=[.!?])\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean);
+  return { id: Number(m.idMeal), title: m.strMeal, ingredients, steps, video: m.strYoutube || "", source: m.strSource || "", thumb: m.strMealThumb || "" };
+}
+async function openOnline(id) {
+  toast("Loading recipe…");
+  try {
+    const m = (await getJSON(MEALDB + "lookup.php?i=" + encodeURIComponent(id))).meals[0];
+    rState = { mode: "online", rec: mealToRecipe(m) }; renderRecipes();
+    $("main").scrollTop = 0;
+  } catch (e) { toast("Couldn't load that recipe"); }
+}
+
 function recipeStep(d) {
   if (rState.mode !== "view") return false;
   const r = recipes.find(x => x.id === rState.id); if (!r) return false;
@@ -414,8 +583,9 @@ function ytId(s) {
 }
 function playVideo(id) {
   const p = $("#player");
+  p.removeAttribute("srcdoc");
   p.src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
-  p.style.display = "block";
+  videoPlaying = true;
   $("#vOpen").innerHTML = `<button style="margin-top:8px" id="vExt">Not playing? Open in YouTube</button>`;
   $("#vExt").onclick = () => window.open("https://m.youtube.com/watch?v=" + id, "_blank");
   vRecent = [id].concat(vRecent.filter(x => x !== id)).slice(0, 8); store.set("videos", vRecent); renderRecent();
@@ -436,7 +606,15 @@ $("#vGo").onclick = () => {
   else window.open("https://m.youtube.com/results?search_query=" + encodeURIComponent(s), "_blank");
   $("#vInput").value = "";
 };
-$("#vInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#vGo").click(); });
+$("#vInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.target.blur(); $("#vGo").click(); } });
+$("#vPaste").onclick = async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    const id = ytId(text.trim());
+    if (id) { playVideo(id); toast("▶ Playing"); } else toast("No YouTube link copied yet");
+  } catch (e) { $("#vInput").focus(); toast("Long-press the box above and choose Paste"); }
+};
+$("#player").srcdoc = `<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#000;color:#9aa3ad;font:20px system-ui;text-align:center;padding:20px;box-sizing:border-box">Video plays here, next to your timers.</body>`;
 
 // ---------- gestures (front camera, motion-based, runs entirely on the tablet) ----------
 // Wave left/right = swipe. Cover the camera with your hand for ~1 s = "cover".
@@ -523,7 +701,7 @@ $("#splashGo").onclick = () => {
   if (store.get("gestures", false)) gesturesOn();
 };
 document.addEventListener("pointerdown", unlockAudio);
-renderPresets(); renderCustom(); renderTimers(); renderRecipes(); renderRecent();
+renderPresets(); renderSidePresets(); renderCustom(); renderTimers(); renderRecipes(); renderRecent();
 showTab(store.get("tab", "timers"));
 tickClock(); setInterval(tickClock, 1000 * 10); setInterval(tickTimers, 500);
 </script>

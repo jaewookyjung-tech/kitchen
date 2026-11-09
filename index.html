@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kitchen</title>
+<style>
+:root {
+  --bg: #15171a; --panel: #1f2328; --panel2: #2a2f36; --text: #f2f2f2; --muted: #9aa3ad;
+  --accent: #ff9f1c; --good: #3ecf8e; --bad: #ff5a5f; --line: #353b43;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; overflow: hidden; }
+button { font: inherit; color: inherit; background: var(--panel2); border: 0; border-radius: 14px;
+  padding: 14px 18px; cursor: pointer; }
+button:active { transform: scale(.97); filter: brightness(1.2); }
+button.primary { background: var(--accent); color: #111; font-weight: 700; }
+button.danger { background: var(--bad); color: #111; font-weight: 700; }
+input, textarea { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px; width: 100%; user-select: text; }
+textarea { min-height: 140px; resize: vertical; }
+.app { display: flex; flex-direction: column; height: 100%; }
+
+/* header */
+header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); }
+.clock { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.date { color: var(--muted); font-size: 16px; }
+.spacer { flex: 1; }
+#gestureBtn { padding: 10px 14px; font-size: 16px; }
+#gestureBtn.on { background: var(--good); color: #111; font-weight: 700; }
+#camPreview { width: 64px; height: 48px; border-radius: 8px; background: #000; display: none; transform: scaleX(-1); }
+
+/* running timers strip */
+#strip { display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; background: var(--bg); min-height: 0; }
+#strip:empty { display: none; }
+.chip { flex: 0 0 auto; background: var(--panel); border: 2px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; font-size: 18px; font-variant-numeric: tabular-nums; }
+.chip b { color: var(--accent); margin-left: 6px; }
+.chip.done { border-color: var(--bad); animation: blink 1s infinite; }
+
+/* tabs */
+nav { display: flex; gap: 8px; padding: 8px 16px; }
+nav button { flex: 1; font-size: 20px; padding: 14px; background: var(--panel); }
+nav button.active { background: var(--accent); color: #111; font-weight: 700; }
+main { flex: 1; overflow-y: auto; padding: 8px 16px 24px; }
+section { display: none; }
+section.active { display: block; }
+h2 { margin: 12px 0 10px; font-size: 22px; }
+.muted { color: var(--muted); }
+
+/* timers */
+.presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.presets button { font-size: 18px; padding: 16px 8px; }
+.presets button small { display: block; color: var(--muted); font-size: 14px; margin-top: 4px; }
+.custom { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px;
+  background: var(--panel); border-radius: 16px; padding: 12px; }
+.custom .readout { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 150px; text-align: center; }
+.custom input { flex: 1 1 160px; }
+.timer { display: flex; align-items: center; gap: 12px; background: var(--panel); border-radius: 18px;
+  padding: 14px 16px; margin-bottom: 10px; position: relative; overflow: hidden; }
+.timer .bar { position: absolute; left: 0; bottom: 0; height: 5px; background: var(--accent); }
+.timer .name { font-size: 20px; flex: 1; }
+.timer .left { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timer.done { outline: 3px solid var(--bad); }
+.timer.paused .left { color: var(--muted); }
+
+/* recipes */
+.rlist button { display: block; width: 100%; text-align: left; font-size: 20px; margin-bottom: 8px; background: var(--panel); }
+.rhead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rhead h2 { flex: 1; }
+.ingredients label { display: flex; gap: 10px; align-items: center; font-size: 19px; padding: 8px 4px;
+  border-bottom: 1px solid var(--line); }
+.ingredients input { width: 26px; height: 26px; flex: 0 0 auto; }
+.ingredients label.got { color: var(--muted); text-decoration: line-through; }
+.stepbox { background: var(--panel); border-radius: 18px; padding: 20px; margin-top: 12px; }
+.stepno { color: var(--accent); font-weight: 700; font-size: 18px; }
+.steptext { font-size: 30px; line-height: 1.35; margin: 10px 0 14px; user-select: text; }
+.stepnav { display: flex; gap: 10px; }
+.stepnav button { flex: 1; font-size: 22px; padding: 20px; }
+.steptimers { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.formrow { margin-bottom: 12px; }
+.formrow label { display: block; margin-bottom: 6px; color: var(--muted); }
+
+/* video */
+.vrow { display: flex; gap: 8px; }
+.vrow input { flex: 1; }
+#player { width: 100%; aspect-ratio: 16/9; border: 0; border-radius: 14px; background: #000; margin-top: 12px; display: none; }
+.vlist button { display: block; width: 100%; text-align: left; margin-top: 8px; background: var(--panel); }
+
+/* alarm overlay */
+#alarm { position: fixed; inset: 0; background: var(--bad); color: #111; display: none; flex-direction: column;
+  align-items: center; justify-content: center; gap: 24px; z-index: 50; animation: flash 1s infinite; text-align: center; padding: 24px; }
+#alarm.show { display: flex; }
+#alarm .big { font-size: 56px; font-weight: 800; }
+#alarm button { font-size: 32px; padding: 26px 60px; background: #111; color: #fff; }
+@keyframes flash { 50% { background: #ffb3b5; } }
+@keyframes blink { 50% { opacity: .4; } }
+
+/* start splash (needed so the browser lets us play sound) */
+#splash { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 18px; z-index: 60; text-align: center; padding: 24px; }
+#splash .big { font-size: 48px; font-weight: 800; }
+#splash button { font-size: 28px; padding: 22px 60px; }
+
+#toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); background: #000c; color: #fff;
+  padding: 14px 24px; border-radius: 999px; font-size: 24px; opacity: 0; transition: opacity .25s; z-index: 70; pointer-events: none; }
+#toast.show { opacity: 1; }
+.hint { font-size: 15px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="clock" id="clock">--:--</div>
+      <div class="date" id="date"></div>
+    </div>
+    <div class="spacer"></div>
+    <video id="camPreview" autoplay muted playsinline></video>
+    <button id="gestureBtn" title="Hand gestures using the front camera">✋ Gestures off</button>
+  </header>
+  <div id="strip"></div>
+  <nav>
+    <button data-tab="timers" class="active">⏱ Timers</button>
+    <button data-tab="recipes">📖 Recipes</button>
+    <button data-tab="video">▶ Video</button>
+  </nav>
+  <main>
+    <!-- TIMERS -->
+    <section id="timers" class="active">
+      <div id="timerList"></div>
+      <h2>Start a timer</h2>
+      <div class="presets" id="presets"></div>
+      <div class="custom">
+        <button data-add="-60">−1m</button>
+        <div class="readout" id="customReadout">05:00</div>
+        <button data-add="60">+1m</button>
+        <button data-add="300">+5m</button>
+        <button data-add="30">+30s</button>
+        <input id="customName" placeholder="Name (optional)">
+        <button class="primary" id="customStart">Start</button>
+      </div>
+    </section>
+
+    <!-- RECIPES -->
+    <section id="recipes">
+      <div id="recipeView"></div>
+    </section>
+
+    <!-- VIDEO -->
+    <section id="video">
+      <h2>YouTube</h2>
+      <div class="vrow">
+        <input id="vInput" placeholder="Search, or paste a YouTube link">
+        <button class="primary" id="vGo">Go</button>
+      </div>
+      <div class="hint">A pasted link plays here. A search opens YouTube in a new tab; copy a video's link and paste it here to play it next to your timers.</div>
+      <iframe id="player" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+      <div id="vOpen"></div>
+      <h2>Recent</h2>
+      <div class="vlist" id="vList"></div>
+    </section>
+  </main>
+</div>
+
+<div id="alarm">
+  <div class="big" id="alarmText">Timer done</div>
+  <button id="alarmStop">Stop</button>
+  <div>Or cover the camera / wave, if gestures are on</div>
+</div>
+
+<div id="splash">
+  <div class="big">🍳 Kitchen</div>
+  <div class="muted">Tap to start, so timers can play their alarm sound.</div>
+  <button class="primary" id="splashGo">Start</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---------- storage (never let a storage failure break the app) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("kitchen." + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("kitchen." + k, JSON.stringify(v)); } catch (e) {} }
+};
+
+// ---------- toast ----------
+let toastT;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1600);
+}
+
+// ---------- clock ----------
+function fmt(sec) {
+  sec = Math.max(0, Math.ceil(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+function tickClock() {
+  const d = new Date();
+  $("#clock").textContent = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  $("#date").textContent = d.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+}
+
+// ---------- tabs ----------
+let currentTab = "timers";
+function showTab(name) {
+  currentTab = name;
+  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$("main section").forEach(s => s.classList.toggle("active", s.id === name));
+  store.set("tab", name);
+}
+$$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- sound ----------
+let audio;
+function unlockAudio() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+  } catch (e) {}
+}
+function beep(freq, start, dur) {
+  if (!audio) return;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.type = "square"; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(0.5, start + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  o.connect(g).connect(audio.destination); o.start(start); o.stop(start + dur + 0.05);
+}
+let alarmLoop = null;
+function startAlarmSound() {
+  if (alarmLoop) return;
+  const play = () => { if (!audio) return; const t = audio.currentTime; [0, .25, .5].forEach(o => beep(1000, t + o, .18)); };
+  play(); alarmLoop = setInterval(play, 1300);
+}
+function stopAlarmSound() { clearInterval(alarmLoop); alarmLoop = null; }
+
+// ---------- timers ----------
+// timer: {id, name, total, endAt (ms, when running), remaining (s, when paused), done}
+let timers = store.get("timers", []);
+const PRESETS = [
+  ["Soft egg", 6 * 60], ["Hard egg", 10 * 60], ["Pasta", 10 * 60],
+  ["Rice", 15 * 60], ["Rest meat", 5 * 60], ["Tea", 4 * 60],
+  ["Oven 20", 20 * 60], ["Oven 30", 30 * 60], ["Oven 45", 45 * 60]
+];
+let customSecs = 300;
+
+function saveTimers() { store.set("timers", timers); }
+function remainingOf(t) { return t.done ? 0 : t.endAt ? (t.endAt - Date.now()) / 1000 : t.remaining; }
+function addTimer(name, secs) {
+  if (secs <= 0) return;
+  timers.push({ id: Date.now() + Math.random(), name: name || fmt(secs) + " timer", total: secs, endAt: Date.now() + secs * 1000, remaining: secs, done: false });
+  saveTimers(); renderTimers(); toast("⏱ " + (name || "Timer") + " started");
+}
+function togglePause(id) {
+  const t = timers.find(x => x.id === id); if (!t || t.done) return;
+  if (t.endAt) { t.remaining = remainingOf(t); t.endAt = null; } else { t.endAt = Date.now() + t.remaining * 1000; }
+  saveTimers(); renderTimers();
+}
+function removeTimer(id) { timers = timers.filter(x => x.id !== id); saveTimers(); renderTimers(); checkAlarm(); }
+function stopAllDone() { timers = timers.filter(t => !t.done); saveTimers(); renderTimers(); checkAlarm(); }
+
+function renderPresets() {
+  $("#presets").innerHTML = PRESETS.map(([n, s], i) => `<button data-p="${i}">${esc(n)}<small>${fmt(s)}</small></button>`).join("");
+  $$("#presets button").forEach(b => b.onclick = () => { const [n, s] = PRESETS[b.dataset.p]; addTimer(n, s); });
+}
+function renderCustom() { $("#customReadout").textContent = fmt(customSecs); }
+$$(".custom [data-add]").forEach(b => b.onclick = () => { customSecs = Math.max(10, customSecs + Number(b.dataset.add)); renderCustom(); });
+$("#customStart").onclick = () => { addTimer($("#customName").value.trim(), customSecs); $("#customName").value = ""; };
+
+function renderTimers() {
+  $("#timerList").innerHTML = timers.length ? timers.map(t => {
+    const left = remainingOf(t), pct = Math.max(0, Math.min(100, 100 * (1 - left / t.total)));
+    const cls = t.done ? "done" : t.endAt ? "" : "paused";
+    return `<div class="timer ${cls}" data-id="${t.id}">
+      <div class="name">${esc(t.name)}</div>
+      <div class="left">${t.done ? "Done!" : fmt(left)}</div>
+      ${t.done ? "" : `<button data-act="pause">${t.endAt ? "Pause" : "Resume"}</button>`}
+      <button data-act="del" class="${t.done ? "danger" : ""}">${t.done ? "Stop" : "✕"}</button>
+      <div class="bar" style="width:${pct}%"></div></div>`;
+  }).join("") : `<p class="muted">No timers running. Tap a preset below, or start one from a recipe step.</p>`;
+  $$("#timerList .timer").forEach(el => {
+    const id = Number(el.dataset.id);
+    $$("button", el).forEach(b => b.onclick = () => b.dataset.act === "pause" ? togglePause(id) : removeTimer(id));
+  });
+  renderStrip();
+}
+function renderStrip() {
+  $("#strip").innerHTML = timers.map(t => `<div class="chip ${t.done ? "done" : ""}">${esc(t.name)}<b>${t.done ? "Done" : fmt(remainingOf(t))}</b></div>`).join("");
+}
+function tickTimers() {
+  let changed = false;
+  timers.forEach(t => { if (!t.done && t.endAt && t.endAt <= Date.now()) { t.done = true; t.endAt = null; t.remaining = 0; changed = true; } });
+  if (changed) saveTimers();
+  // cheap per-second update without rebuilding buttons
+  $$("#timerList .timer").forEach(el => {
+    const t = timers.find(x => x.id === Number(el.dataset.id)); if (!t) return;
+    const left = remainingOf(t);
+    $(".left", el).textContent = t.done ? "Done!" : fmt(left);
+    $(".bar", el).style.width = Math.max(0, Math.min(100, 100 * (1 - left / t.total))) + "%";
+  });
+  if (changed) renderTimers(); else renderStrip();
+  checkAlarm();
+}
+function checkAlarm() {
+  const done = timers.filter(t => t.done);
+  if (done.length) {
+    $("#alarmText").textContent = done.map(t => t.name).join(", ") + " — done!";
+    $("#alarm").classList.add("show"); startAlarmSound();
+  } else { $("#alarm").classList.remove("show"); stopAlarmSound(); }
+}
+$("#alarmStop").onclick = stopAllDone;
+
+// ---------- recipes ----------
+const SAMPLE = [
+  { id: 1, title: "Simple tomato pasta",
+    ingredients: ["200 g spaghetti", "2 tbsp olive oil", "2 garlic cloves, sliced", "1 tin chopped tomatoes", "Salt and pepper", "Handful of basil", "Parmesan to serve"],
+    steps: ["Bring a large pot of salted water to the boil.",
+      "Add the spaghetti and cook for 10 minutes, stirring now and then.",
+      "Meanwhile, warm the olive oil in a pan and gently fry the garlic for 1 minute.",
+      "Add the tomatoes, season, and simmer for 8 minutes.",
+      "Drain the pasta, keeping a splash of the water. Toss it with the sauce and the water.",
+      "Tear over the basil and serve with parmesan."] },
+  { id: 2, title: "Soft-boiled eggs & soldiers",
+    ingredients: ["2 eggs, at room temperature", "2 slices of bread", "Butter", "Salt"],
+    steps: ["Bring a small pan of water to a gentle boil.",
+      "Lower in the eggs and cook for 6 minutes.",
+      "While they cook, toast and butter the bread, then cut it into strips.",
+      "Move the eggs to egg cups, slice off the tops and season."] }
+];
+let recipes = store.get("recipes", null) || SAMPLE;
+let rState = { mode: "list", id: null, step: 0, got: {} };
+function saveRecipes() { store.set("recipes", recipes); }
+
+// find durations like "10 minutes", "1 hour", "30 secs", "5-6 min" in a step
+function findDurations(text) {
+  const out = [], re = /(\d+(?:\.\d+)?)(?:\s*(?:-|to|–)\s*(\d+(?:\.\d+)?))?\s*(hours?|hrs?|h\b|minutes?|mins?|m\b|seconds?|secs?|s\b)/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    const n = Number(m[2] || m[1]), u = m[3].toLowerCase();
+    const secs = u.startsWith("h") ? n * 3600 : u.startsWith("s") ? n : n * 60;
+    if (secs >= 10 && secs <= 6 * 3600) out.push({ label: m[0], secs: Math.round(secs) });
+  }
+  return out;
+}
+function renderRecipes() {
+  const v = $("#recipeView");
+  if (rState.mode === "list") {
+    v.innerHTML = `<div class="rhead"><h2>Recipes</h2><button class="primary" id="rNew">+ Add recipe</button></div>
+      <div class="rlist">${recipes.map(r => `<button data-id="${r.id}">${esc(r.title)}</button>`).join("")}</div>`;
+    $("#rNew").onclick = () => { rState = { mode: "edit", id: null }; renderRecipes(); };
+    $$(".rlist button").forEach(b => b.onclick = () => { rState = { mode: "view", id: Number(b.dataset.id), step: 0, got: {} }; renderRecipes(); });
+  } else if (rState.mode === "view") {
+    const r = recipes.find(x => x.id === rState.id); if (!r) { rState = { mode: "list" }; return renderRecipes(); }
+    const s = Math.min(rState.step, r.steps.length - 1), text = r.steps[s] || "";
+    const durs = findDurations(text);
+    v.innerHTML = `<div class="rhead"><button id="rBack">‹ All</button><h2>${esc(r.title)}</h2><button id="rEdit">Edit</button></div>
+      <div class="stepbox">
+        <div class="stepno">Step ${s + 1} of ${r.steps.length}</div>
+        <div class="steptext">${esc(text)}</div>
+        <div class="steptimers">${durs.map((d, i) => `<button class="primary" data-d="${i}">⏱ Start ${esc(d.label)}</button>`).join("")}</div>
+        <div class="stepnav"><button id="rPrev" ${s === 0 ? "disabled" : ""}>‹ Back</button><button id="rNext" class="primary">${s === r.steps.length - 1 ? "Finished ✓" : "Next ›"}</button></div>
+        <div class="hint">With gestures on: wave right for next, left for back.</div>
+      </div>
+      <h2>Ingredients</h2>
+      <div class="ingredients">${r.ingredients.map((g, i) => `<label class="${rState.got[i] ? "got" : ""}"><input type="checkbox" data-i="${i}" ${rState.got[i] ? "checked" : ""}>${esc(g)}</label>`).join("")}</div>`;
+    $("#rBack").onclick = () => { rState = { mode: "list" }; renderRecipes(); };
+    $("#rEdit").onclick = () => { rState = { mode: "edit", id: r.id }; renderRecipes(); };
+    $("#rPrev").onclick = () => recipeStep(-1);
+    $("#rNext").onclick = () => s === r.steps.length - 1 ? (rState = { mode: "list" }, renderRecipes()) : recipeStep(1);
+    $$(".steptimers button").forEach(b => b.onclick = () => { const d = durs[b.dataset.d]; addTimer(r.title.split(" ").slice(0, 2).join(" ") + " · step " + (s + 1), d.secs); });
+    $$(".ingredients input").forEach(c => c.onchange = () => { rState.got[c.dataset.i] = c.checked; c.parentElement.classList.toggle("got", c.checked); });
+  } else {
+    const r = recipes.find(x => x.id === rState.id) || { title: "", ingredients: [], steps: [] };
+    v.innerHTML = `<div class="rhead"><button id="rCancel">‹ Cancel</button><h2>${rState.id ? "Edit" : "New"} recipe</h2></div>
+      <div class="formrow"><label>Title</label><input id="fTitle" value="${esc(r.title)}"></div>
+      <div class="formrow"><label>Ingredients: one per line</label><textarea id="fIng">${esc(r.ingredients.join("\n"))}</textarea></div>
+      <div class="formrow"><label>Steps: one per line. Times like "10 minutes" get a start-timer button.</label><textarea id="fSteps" style="min-height:220px">${esc(r.steps.join("\n"))}</textarea></div>
+      <div class="stepnav"><button class="primary" id="fSave">Save</button>${rState.id ? `<button class="danger" id="fDel">Delete</button>` : ""}</div>`;
+    $("#rCancel").onclick = () => { rState = rState.id ? { mode: "view", id: rState.id, step: 0, got: {} } : { mode: "list" }; renderRecipes(); };
+    $("#fSave").onclick = () => {
+      const lines = id => $(id).value.split("\n").map(x => x.replace(/^\s*(?:\d+[.)]|[-•*])\s*/, "").trim()).filter(Boolean);
+      const rec = { id: rState.id || Date.now(), title: $("#fTitle").value.trim() || "Untitled", ingredients: lines("#fIng"), steps: lines("#fSteps") };
+      if (!rec.steps.length) return toast("Add at least one step");
+      recipes = recipes.filter(x => x.id !== rec.id).concat(rec); saveRecipes();
+      rState = { mode: "view", id: rec.id, step: 0, got: {} }; renderRecipes();
+    };
+    if (rState.id) $("#fDel").onclick = () => { if (confirm("Delete this recipe?")) { recipes = recipes.filter(x => x.id !== rState.id); saveRecipes(); rState = { mode: "list" }; renderRecipes(); } };
+  }
+}
+function recipeStep(d) {
+  if (rState.mode !== "view") return false;
+  const r = recipes.find(x => x.id === rState.id); if (!r) return false;
+  const n = Math.max(0, Math.min(r.steps.length - 1, rState.step + d));
+  if (n === rState.step) return false;
+  rState.step = n; renderRecipes(); return true;
+}
+
+// ---------- video ----------
+let vRecent = store.get("videos", []);
+function ytId(s) {
+  const m = s.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : (/^[A-Za-z0-9_-]{11}$/.test(s) ? s : null);
+}
+function playVideo(id) {
+  const p = $("#player");
+  p.src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+  p.style.display = "block";
+  $("#vOpen").innerHTML = `<button style="margin-top:8px" id="vExt">Not playing? Open in YouTube</button>`;
+  $("#vExt").onclick = () => window.open("https://m.youtube.com/watch?v=" + id, "_blank");
+  vRecent = [id].concat(vRecent.filter(x => x !== id)).slice(0, 8); store.set("videos", vRecent); renderRecent();
+}
+function ytCommand(func) {
+  const p = $("#player"); if (!p.src) return false;
+  p.contentWindow.postMessage(JSON.stringify({ event: "command", func, args: [] }), "*"); return true;
+}
+let videoPlaying = true;
+function renderRecent() {
+  $("#vList").innerHTML = vRecent.length ? vRecent.map(id => `<button data-v="${id}">▶ youtu.be/${id}</button>`).join("") : `<p class="muted">Videos you play will appear here.</p>`;
+  $$("#vList button").forEach(b => b.onclick = () => playVideo(b.dataset.v));
+}
+$("#vGo").onclick = () => {
+  const s = $("#vInput").value.trim(); if (!s) return;
+  const id = ytId(s);
+  if (id) { playVideo(id); videoPlaying = true; }
+  else window.open("https://m.youtube.com/results?search_query=" + encodeURIComponent(s), "_blank");
+  $("#vInput").value = "";
+};
+$("#vInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#vGo").click(); });
+
+// ---------- gestures (front camera, motion-based, runs entirely on the tablet) ----------
+// Wave left/right = swipe. Cover the camera with your hand for ~1 s = "cover".
+const G = { on: false, stream: null, timer: null, prev: null, track: [], baseBright: null, darkSince: 0, cooldownUntil: 0 };
+const GW = 32, GH = 24;
+const gCanvas = document.createElement("canvas"); gCanvas.width = GW; gCanvas.height = GH;
+const gCtx = gCanvas.getContext("2d", { willReadFrequently: true });
+
+async function gesturesOn() {
+  try {
+    G.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 160, height: 120, frameRate: 15 }, audio: false });
+  } catch (e) { toast("Camera not available: " + (e.name || e)); return; }
+  const v = $("#camPreview"); v.srcObject = G.stream; v.style.display = "block";
+  G.on = true; G.prev = null; G.track = []; G.baseBright = null;
+  G.timer = setInterval(gestureFrame, 100);
+  $("#gestureBtn").classList.add("on"); $("#gestureBtn").textContent = "✋ Gestures on";
+  store.set("gestures", true); toast("Gestures on: wave or cover the camera");
+}
+function gesturesOff() {
+  clearInterval(G.timer); G.on = false;
+  if (G.stream) G.stream.getTracks().forEach(t => t.stop());
+  G.stream = null; $("#camPreview").style.display = "none";
+  $("#gestureBtn").classList.remove("on"); $("#gestureBtn").textContent = "✋ Gestures off";
+  store.set("gestures", false);
+}
+$("#gestureBtn").onclick = () => G.on ? gesturesOff() : gesturesOn();
+
+function gestureFrame() {
+  const v = $("#camPreview"); if (v.readyState < 2) return;
+  gCtx.drawImage(v, 0, 0, GW, GH);
+  const d = gCtx.getImageData(0, 0, GW, GH).data, n = GW * GH, cur = new Uint8Array(n);
+  let bright = 0;
+  for (let i = 0; i < n; i++) { cur[i] = (d[i * 4] * 3 + d[i * 4 + 1] * 6 + d[i * 4 + 2]) / 10; bright += cur[i]; }
+  bright /= n;
+  const now = Date.now();
+
+  // cover detection: picture becomes much darker than the room's normal level
+  if (G.baseBright === null) G.baseBright = bright;
+  if (bright < G.baseBright * 0.35 && bright < 60) {
+    if (!G.darkSince) G.darkSince = now;
+    else if (now - G.darkSince > 900 && now > G.cooldownUntil) { G.darkSince = 0; G.cooldownUntil = now + 1500; G.track = []; onGesture("cover"); }
+    G.prev = cur; return;
+  }
+  G.darkSince = 0;
+  G.baseBright = G.baseBright * 0.97 + bright * 0.03; // follow slow lighting changes
+
+  if (!G.prev) { G.prev = cur; return; }
+  let mass = 0, sx = 0;
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    const i = y * GW + x;
+    if (Math.abs(cur[i] - G.prev[i]) > 28) { mass++; sx += x; }
+  }
+  G.prev = cur;
+  if (now < G.cooldownUntil) { G.track = []; return; }
+
+  if (mass > n * 0.04 && mass < n * 0.7) {
+    G.track.push({ t: now, x: sx / mass / GW });
+    G.track = G.track.filter(p => now - p.t < 1200);
+  } else if (G.track.length >= 3) {
+    const a = G.track[0], b = G.track[G.track.length - 1], dx = b.x - a.x;
+    G.track = [];
+    // the front camera's picture is not mirrored: your hand moving to YOUR right moves left in the image
+    if (Math.abs(dx) > 0.35) { G.cooldownUntil = now + 900; onGesture(dx < 0 ? "right" : "left"); }
+  } else G.track = [];
+}
+
+function onGesture(g) {
+  if ($("#alarm").classList.contains("show")) { stopAllDone(); toast("✋ Alarm stopped"); return; }
+  if (g === "cover") {
+    if (currentTab === "video" && $("#player").src) { videoPlaying = !videoPlaying; ytCommand(videoPlaying ? "playVideo" : "pauseVideo"); toast(videoPlaying ? "▶ Play" : "⏸ Pause"); }
+    else { const running = timers.filter(t => !t.done); if (running.length) { running.forEach(t => togglePause(t.id)); toast("✋ Timers paused/resumed"); } else toast("✋ Cover"); }
+    return;
+  }
+  const d = g === "right" ? 1 : -1;
+  if (currentTab === "recipes" && rState.mode === "view") { if (recipeStep(d)) toast(d > 0 ? "👉 Next step" : "👈 Previous step"); return; }
+  const order = ["timers", "recipes", "video"];
+  showTab(order[(order.indexOf(currentTab) + d + order.length) % order.length]);
+  toast(d > 0 ? "👉" : "👈");
+}
+
+// ---------- start ----------
+$("#splashGo").onclick = () => {
+  unlockAudio(); $("#splash").remove();
+  if (store.get("gestures", false)) gesturesOn();
+};
+document.addEventListener("pointerdown", unlockAudio);
+renderPresets(); renderCustom(); renderTimers(); renderRecipes(); renderRecent();
+showTab(store.get("tab", "timers"));
+tickClock(); setInterval(tickClock, 1000 * 10); setInterval(tickTimers, 500);
+</script>
+</body>
+</html>

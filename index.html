@@ -27,7 +27,9 @@ header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; back
 .clock { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .date { color: var(--muted); font-size: 16px; }
 .spacer { flex: 1; }
-#gestureBtn { padding: 10px 14px; font-size: 16px; }
+#gestureBtn { flex: 0 0 auto; padding: 14px 16px; font-size: 18px; }
+nav { align-items: center; }
+nav #camPreview { flex: 0 0 auto; }
 #gestureBtn.on { background: var(--good); color: #111; font-weight: 700; }
 #camPreview { width: 64px; height: 48px; border-radius: 8px; background: #000; display: none; transform: scaleX(-1); }
 
@@ -147,21 +149,14 @@ body[data-tab="video"] #strip { display: none; }
 </head>
 <body>
 <div class="app">
-  <header>
-    <div>
-      <div class="clock" id="clock">--:--</div>
-      <div class="date" id="date"></div>
-    </div>
-    <div class="spacer"></div>
-    <video id="camPreview" autoplay muted playsinline></video>
-    <button id="gestureBtn" title="Hand gestures using the front camera">✋ Gestures off</button>
-  </header>
-  <div id="strip"></div>
   <nav>
     <button data-tab="timers" class="active">⏱ Timers</button>
     <button data-tab="recipes">📖 Recipes</button>
     <button data-tab="video">▶ Video</button>
+    <video id="camPreview" autoplay muted playsinline></video>
+    <button id="gestureBtn" title="Hand gestures using the front camera">✋ Gestures off</button>
   </nav>
+  <div id="strip"></div>
   <main>
     <!-- TIMERS -->
     <section id="timers" class="active">
@@ -261,12 +256,12 @@ function tickClock() {
 let currentTab = "timers";
 function showTab(name) {
   currentTab = name;
-  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$("nav button[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   $$("main section").forEach(s => s.classList.toggle("active", s.id === name));
   document.body.dataset.tab = name;
   store.set("tab", name);
 }
-$$("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$$("nav button[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
 // ---------- sound ----------
 let audio;
@@ -703,7 +698,7 @@ $("#splashGo").onclick = () => {
 document.addEventListener("pointerdown", unlockAudio);
 renderPresets(); renderSidePresets(); renderCustom(); renderTimers(); renderRecipes(); renderRecent();
 showTab(store.get("tab", "timers"));
-tickClock(); setInterval(tickClock, 1000 * 10); setInterval(tickTimers, 500);
+setInterval(tickTimers, 500);
 </script>
 </body>
 </html>
